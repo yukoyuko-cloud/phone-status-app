@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>電話していいよ</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="app">
+
+        <header class="header">
+            <h1>📞 電話していいよ</h1>
+            <p id="roomDisplay">Room: 読み込み中...</p>
+        </header>
+
+
+        <!-- 現在の電話状態 -->
+        <section id="statusCard" class="status-card ng">
+
+            <div id="statusIcon" class="status-icon">
+                🔴
+            </div>
+
+            <h2 id="statusText">
+                今は電話できません
+            </h2>
+
+            <p id="remainingTime" class="remaining-time">
+                -
+            </p>
+
+        </section>
+
+
+        <!-- 電話OK設定 -->
+        <section class="control-section">
+
+            <h2>電話OKの時間</h2>
+
+            <div class="time-input">
+
+                <div class="input-group">
+                    <input
+                        type="number"
+                        id="hoursInput"
+                        min="0"
+                        max="23"
+                        value="1"
+                        inputmode="numeric"
+                    >
+                    <span>時間</span>
+                </div>
+
+                <div class="input-group">
+                    <input
+                        type="number"
+                        id="minutesInput"
+                        min="0"
+                        max="59"
+                        value="30"
+                        inputmode="numeric"
+                    >
+                    <span>分</span>
+                </div>
+
+            </div>
+
+
+            <button
+                id="okButton"
+                class="action-button ok-button"
+            >
+                🟢 電話してOK
+            </button>
+
+
+            <button
+                id="ngButton"
+                class="action-button ng-button"
+            >
+                🔴 今日は無理
+            </button>
+
+        </section>
+
+
+        <!-- URLコピー -->
+        <section class="share-section">
+
+            <button
+                id="copyButton"
+                class="copy-button"
+            >
+                🔗 このURLをコピー
+            </button>
+
+        </section>
+
+
+        <!-- エラー・状態メッセージ -->
+        <div
+            id="message"
+            class="message"
+            aria-live="polite"
+        ></div>
+
+    </main>
+
+
+    <!-- Supabase JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- 自分たちのJavaScript -->
+    <script src="app.js"></script>
+
+</body>
+</html>
