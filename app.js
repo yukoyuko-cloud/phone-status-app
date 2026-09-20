@@ -9,7 +9,7 @@
 // ============================================
 
 const SUPABASE_URL =
-    "https://yazersdyvuhirftxocze.supabase.co/rest/v1/";
+    "https://yazersdyvuhirftxocze.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
     "sb_publishable_M997uooOd5ovhvCPYWfOAQ_qIUqLBp1";
