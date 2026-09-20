@@ -1,30 +1,33 @@
-// ============================================
+// ============================================================
 // 電話OK / NG共有アプリ
 // app.js
-// ============================================
+// ============================================================
 
 
-// ============================================
+// ============================================================
 // 1. Supabase設定
-// ============================================
+// ============================================================
 
+// ★ここは自分のSupabaseの Project URL
+// 「/rest/v1/」は付けない
 const SUPABASE_URL =
     "https://yazersdyvuhirftxocze.supabase.co";
 
+// ★ここはSupabaseの Publishable key
 const SUPABASE_PUBLISHABLE_KEY =
     "sb_publishable_M997uooOd5ovhvCPYWfOAQ_qIUqLBp1";
 
 
-const supabaseClient =
-    supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY
-    );
+// Supabaseクライアント作成
+const supabaseClient = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+);
 
 
-// ============================================
-// 2. DOM
-// ============================================
+// ============================================================
+// 2. DOM取得
+// ============================================================
 
 const statusCard =
     document.getElementById("statusCard");
@@ -32,23 +35,14 @@ const statusCard =
 const statusIcon =
     document.getElementById("statusIcon");
 
-const statusTitle =
-    document.getElementById("statusTitle");
+const statusText =
+    document.getElementById("statusText");
 
 const remainingTime =
     document.getElementById("remainingTime");
 
-const expirationText =
-    document.getElementById("expirationText");
-
-const roomText =
-    document.getElementById("roomText");
-
-const errorMessage =
-    document.getElementById("errorMessage");
-
-const connectionStatus =
-    document.getElementById("connectionStatus");
+const roomDisplay =
+    document.getElementById("roomDisplay");
 
 const hoursInput =
     document.getElementById("hoursInput");
@@ -65,13 +59,30 @@ const ngButton =
 const copyButton =
     document.getElementById("copyButton");
 
-const copyMessage =
-    document.getElementById("copyMessage");
+const message =
+    document.getElementById("message");
 
 
-// ============================================
-// 3. room_id取得
-// ============================================
+// ============================================================
+// 3. グローバル変数
+// ============================================================
+
+let roomId = null;
+
+let currentStatus = "ng";
+
+let currentExpiresAt = null;
+
+let countdownTimer = null;
+
+let realtimeChannel = null;
+
+let isUpdating = false;
+
+
+// ============================================================
+// 4. room_id取得
+// ============================================================
 
 function getRoomId() {
 
@@ -80,18 +91,18 @@ function getRoomId() {
             window.location.search
         );
 
-    let roomId =
+    let room =
         params.get("room");
 
 
     // roomが存在しない場合
-    if (!roomId) {
+    if (!room) {
 
-        roomId =
+        room =
             crypto.randomUUID();
 
         const newUrl =
-            `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(room)}`;
 
         window.history.replaceState(
             {},
@@ -100,395 +111,166 @@ function getRoomId() {
         );
     }
 
-    return roomId;
-}
+
+    // room_idの形式チェック
+    // 英数字、_、- を3～64文字まで許可
+    const validRoomId =
+        /^[A-Za-z0-9_-]{3,64}$/;
 
 
-const roomId = getRoomId();
+    if (!validRoomId.test(room)) {
 
-roomText.textContent =
-    `Room: ${roomId}`;
-
-
-// ============================================
-// 4. room_idのバリデーション
-// ============================================
-
-function isValidRoomId(roomId) {
-
-    if (!roomId) {
-        return false;
+        throw new Error(
+            "不正なroom_idです"
+        );
     }
 
-    // UUIDまたは英数字・ハイフンのみ
-    return /^[a-zA-Z0-9_-]{1,100}$/.test(roomId);
+
+    return room;
 }
 
 
-if (!isValidRoomId(roomId)) {
+// ============================================================
+// 5. メッセージ表示
+// ============================================================
 
-    showError(
-        "URLのroom情報が正しくありません"
-    );
+function showMessage(
+    text,
+    type = ""
+) {
 
-    disableControls();
+    message.textContent = text;
+
+    message.className =
+        "message";
+
+    if (type) {
+
+        message.classList.add(type);
+    }
 }
 
 
-// ============================================
-// 5. 現在のroom状態
-// ============================================
+// ============================================================
+// 6. ボタンの有効 / 無効
+// ============================================================
 
-let currentRoom = null;
+function setButtonsDisabled(
+    disabled
+) {
 
-let countdownTimer = null;
+    okButton.disabled =
+        disabled;
+
+    ngButton.disabled =
+        disabled;
+
+    copyButton.disabled =
+        disabled;
+}
 
 
-// ============================================
-// 6. 初期化
-// ============================================
+// ============================================================
+// 7. room表示
+// ============================================================
 
-async function initialize() {
+function renderRoomId() {
 
-    if (!isValidRoomId(roomId)) {
+    roomDisplay.textContent =
+        `Room: ${roomId}`;
+}
+
+
+// ============================================================
+// 8. 状態を画面へ反映
+// ============================================================
+
+function renderStatus(
+    status,
+    expiresAt
+) {
+
+    currentStatus =
+        status;
+
+    currentExpiresAt =
+        expiresAt;
+
+
+    // ========================================
+    // OK
+    // ========================================
+
+    if (
+        status === "ok" &&
+        expiresAt
+    ) {
+
+        statusCard.classList.remove(
+            "ng"
+        );
+
+        statusCard.classList.add(
+            "ok"
+        );
+
+        statusIcon.textContent =
+            "🟢";
+
+        statusText.textContent =
+            "電話してOK";
+
+        updateCountdown();
+
+        startCountdown();
+
         return;
     }
 
 
-    try {
-
-        setConnectionStatus(
-            "● 接続中..."
-        );
-
-
-        // ------------------------------------
-        // room取得
-        // ------------------------------------
-
-        const {
-            data,
-            error
-        } = await supabaseClient
-            .from("rooms")
-            .select("*")
-            .eq("room_id", roomId)
-            .maybeSingle();
-
-
-        if (error) {
-
-            console.error(
-                "room取得エラー:",
-                error
-            );
-
-            throw error;
-        }
-
-
-        // ------------------------------------
-        // roomが存在しない
-        // ------------------------------------
-
-        if (!data) {
-
-            const {
-                error: insertError
-            } = await supabaseClient
-                .from("rooms")
-                .insert({
-                    room_id: roomId,
-                    status: "ng",
-                    expires_at: null
-                });
-
-
-            // 同時アクセスによる
-            // unique conflictは再取得すればOK
-            if (
-                insertError &&
-                insertError.code !== "23505"
-            ) {
-
-                console.error(
-                    "room作成エラー:",
-                    insertError
-                );
-
-                throw insertError;
-            }
-
-
-            // 作成後に取得
-            const {
-                data: createdRoom,
-                error: fetchError
-            } = await supabaseClient
-                .from("rooms")
-                .select("*")
-                .eq("room_id", roomId)
-                .single();
-
-
-            if (fetchError) {
-
-                console.error(
-                    "作成room取得エラー:",
-                    fetchError
-                );
-
-                throw fetchError;
-            }
-
-
-            currentRoom =
-                createdRoom;
-
-        } else {
-
-            currentRoom =
-                data;
-        }
-
-
-        // ------------------------------------
-        // 表示
-        // ------------------------------------
-
-        renderRoom(
-            currentRoom
-        );
-
-
-        // ------------------------------------
-        // Realtime
-        // ------------------------------------
-
-        setupRealtime();
-
-
-        setConnectionStatus(
-            "● 接続中"
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "初期化エラー:",
-            error
-        );
-
-        showError(
-            "状態の取得に失敗しました"
-        );
-
-        setConnectionStatus(
-            "● 接続エラー"
-        );
-    }
-}
-
-
-// ============================================
-// 7. 状態表示
-// ============================================
-
-function renderRoom(room) {
-
-    currentRoom =
-        room;
-
-
-    hideError();
-
-
-    if (
-        room.status === "ok" &&
-        room.expires_at
-    ) {
-
-        renderOk(room);
-
-    } else {
-
-        renderNg();
-    }
-}
-
-
-// ============================================
-// 8. OK表示
-// ============================================
-
-function renderOk(room) {
-
-    statusCard.classList.remove(
-        "status-ng"
-    );
-
-    statusCard.classList.add(
-        "status-ok"
-    );
-
-
-    statusIcon.textContent =
-        "🟢";
-
-
-    statusTitle.textContent =
-        "電話してOK";
-
-
-    remainingTime.classList.remove(
-        "hidden"
-    );
-
-
-    expirationText.classList.remove(
-        "hidden"
-    );
-
-
-    startCountdown(
-        room.expires_at
-    );
-}
-
-
-// ============================================
-// 9. NG表示
-// ============================================
-
-function renderNg() {
+    // ========================================
+    // NG
+    // ========================================
 
     stopCountdown();
 
-
     statusCard.classList.remove(
-        "status-ok"
+        "ok"
     );
 
     statusCard.classList.add(
-        "status-ng"
+        "ng"
     );
-
 
     statusIcon.textContent =
         "🔴";
 
-
-    statusTitle.textContent =
+    statusText.textContent =
         "今は電話できません";
 
-
-    remainingTime.classList.add(
-        "hidden"
-    );
-
-
-    expirationText.classList.add(
-        "hidden"
-    );
+    remainingTime.textContent =
+        "";
 }
 
 
-// ============================================
-// 10. カウントダウン
-// ============================================
-
-function startCountdown(
-    expiresAt
-) {
-
-    stopCountdown();
-
-
-    function update() {
-
-        const now =
-            Date.now();
-
-        const expires =
-            new Date(
-                expiresAt
-            ).getTime();
-
-
-        const diff =
-            expires - now;
-
-
-        if (diff <= 0) {
-
-            remainingTime.textContent =
-                "まもなく自動的にNGになります";
-
-
-            expirationText.textContent =
-                "";
-
-
-            // サーバー側にもNG化を要求
-            expireRoomImmediately();
-
-            return;
-        }
-
-
-        remainingTime.textContent =
-            `あと ${formatRemainingTime(diff)}`;
-
-
-        const expirationDate =
-            new Date(expiresAt);
-
-
-        expirationText.textContent =
-            `有効期限: ${formatDateTime(expirationDate)}`;
-    }
-
-
-    update();
-
-
-    countdownTimer =
-        setInterval(
-            update,
-            1000
-        );
-}
-
-
-// ============================================
-// 11. カウントダウン停止
-// ============================================
-
-function stopCountdown() {
-
-    if (countdownTimer !== null) {
-
-        clearInterval(
-            countdownTimer
-        );
-
-        countdownTimer =
-            null;
-    }
-}
-
-
-// ============================================
-// 12. 残り時間フォーマット
-// ============================================
+// ============================================================
+// 9. 残り時間計算
+// ============================================================
 
 function formatRemainingTime(
     milliseconds
 ) {
 
+    if (
+        milliseconds <= 0
+    ) {
+
+        return "まもなく自動的にNGになります";
+    }
+
+
     let totalSeconds =
-        Math.ceil(
+        Math.floor(
             milliseconds / 1000
         );
 
@@ -512,155 +294,449 @@ function formatRemainingTime(
         totalSeconds % 60;
 
 
+    // 1時間以上
     if (hours >= 1) {
 
-        return `${hours}時間${minutes}分${seconds}秒`;
-
+        return (
+            `あと ${hours}時間` +
+            `${minutes}分` +
+            `${seconds}秒`
+        );
     }
 
 
+    // 1時間未満
     if (minutes >= 1) {
 
-        return `${minutes}分${seconds}秒`;
-
+        return (
+            `あと ${minutes}分` +
+            `${seconds}秒`
+        );
     }
 
 
-    return `${seconds}秒`;
-}
-
-
-// ============================================
-// 13. 日時表示
-// ============================================
-
-function formatDateTime(
-    date
-) {
-
-    return date.toLocaleString(
-        "ja-JP",
-        {
-            year: "numeric",
-            month: "numeric",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
-        }
+    // 1分未満
+    return (
+        `あと ${seconds}秒`
     );
 }
 
 
-// ============================================
-// 14. 電話OKボタン
-// ============================================
+// ============================================================
+// 10. カウントダウン更新
+// ============================================================
 
-okButton.addEventListener(
-    "click",
-    async () => {
+function updateCountdown() {
 
-        await setPhoneOk();
+    if (
+        currentStatus !== "ok" ||
+        !currentExpiresAt
+    ) {
 
+        remainingTime.textContent =
+            "";
+
+        return;
     }
-);
 
+
+    const expiresTime =
+        new Date(
+            currentExpiresAt
+        ).getTime();
+
+
+    const now =
+        Date.now();
+
+
+    const remaining =
+        expiresTime - now;
+
+
+    remainingTime.textContent =
+        formatRemainingTime(
+            remaining
+        );
+
+
+    // ========================================
+    // 期限到達
+    // ========================================
+
+    if (remaining <= 0) {
+
+        handleLocalExpiration();
+    }
+}
+
+
+// ============================================================
+// 11. カウントダウン開始
+// ============================================================
+
+function startCountdown() {
+
+    stopCountdown();
+
+
+    countdownTimer =
+        setInterval(
+            () => {
+
+                updateCountdown();
+
+            },
+            1000
+        );
+}
+
+
+// ============================================================
+// 12. カウントダウン停止
+// ============================================================
+
+function stopCountdown() {
+
+    if (
+        countdownTimer
+    ) {
+
+        clearInterval(
+            countdownTimer
+        );
+
+        countdownTimer =
+            null;
+    }
+}
+
+
+// ============================================================
+// 13. ブラウザ側で期限到達を検知
+// ============================================================
+
+async function handleLocalExpiration() {
+
+    stopCountdown();
+
+
+    remainingTime.textContent =
+        "まもなく自動的にNGになります";
+
+
+    // DB側のCronが処理する前に
+    // 開いているブラウザからNG更新を試みる
+    try {
+
+        const { error } =
+            await supabaseClient
+                .from("rooms")
+                .update({
+                    status: "ng",
+                    expires_at: null
+                })
+                .eq(
+                    "room_id",
+                    roomId
+                )
+                .eq(
+                    "status",
+                    "ok"
+                );
+
+
+        if (error) {
+
+            console.error(
+                "期限切れ更新エラー:",
+                error
+            );
+
+            // Cronが後から処理するので
+            // ここでは画面だけNGにする
+            renderStatus(
+                "ng",
+                null
+            );
+
+            return;
+        }
+
+
+        renderStatus(
+            "ng",
+            null
+        );
+
+    } catch (error) {
+
+        console.error(
+            "期限切れ処理エラー:",
+            error
+        );
+
+        renderStatus(
+            "ng",
+            null
+        );
+    }
+}
+
+
+// ============================================================
+// 14. room取得
+// ============================================================
+
+async function fetchRoom() {
+
+    try {
+
+        const {
+            data,
+            error
+        } = await supabaseClient
+            .from("rooms")
+            .select(
+                "room_id,status,expires_at,created_at"
+            )
+            .eq(
+                "room_id",
+                roomId
+            )
+            .maybeSingle();
+
+
+        if (error) {
+
+            console.error(
+                "room取得エラー:",
+                error
+            );
+
+            throw error;
+        }
+
+
+        // ========================================
+        // roomが存在する
+        // ========================================
+
+        if (data) {
+
+            renderStatus(
+                data.status,
+                data.expires_at
+            );
+
+            return;
+        }
+
+
+        // ========================================
+        // roomが存在しない
+        // ========================================
+
+        await createRoom();
+
+    } catch (error) {
+
+        console.error(
+            "room取得処理エラー:",
+            error
+        );
+
+        showMessage(
+            "状態の取得に失敗しました",
+            "error"
+        );
+    }
+}
+
+
+// ============================================================
+// 15. room作成
+// ============================================================
+
+async function createRoom() {
+
+    try {
+
+        const {
+            data,
+            error
+        } = await supabaseClient
+            .from("rooms")
+            .insert({
+                room_id: roomId,
+                status: "ng",
+                expires_at: null
+            })
+            .select(
+                "room_id,status,expires_at,created_at"
+            )
+            .single();
+
+
+        // ========================================
+        // 同時アクセスによる重複作成
+        // ========================================
+
+        if (
+            error
+        ) {
+
+            console.error(
+                "room作成エラー:",
+                error
+            );
+
+
+            // すでに別ブラウザが
+            // 同じroomを作った可能性がある
+            const {
+                data: existingRoom,
+                error: fetchError
+            } = await supabaseClient
+                .from("rooms")
+                .select(
+                    "room_id,status,expires_at,created_at"
+                )
+                .eq(
+                    "room_id",
+                    roomId
+                )
+                .maybeSingle();
+
+
+            if (
+                !fetchError &&
+                existingRoom
+            ) {
+
+                renderStatus(
+                    existingRoom.status,
+                    existingRoom.expires_at
+                );
+
+                return;
+            }
+
+
+            throw error;
+        }
+
+
+        renderStatus(
+            data.status,
+            data.expires_at
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "room作成処理エラー:",
+            error
+        );
+
+        showMessage(
+            "roomの作成に失敗しました",
+            "error"
+        );
+    }
+}
+
+
+// ============================================================
+// 16. 電話OKに変更
+// ============================================================
 
 async function setPhoneOk() {
 
-    hideError();
-
-
-    const hours =
-        Number(
-            hoursInput.value
-        );
-
-    const minutes =
-        Number(
-            minutesInput.value
-        );
-
-
-    // ------------------------------------
-    // 入力チェック
-    // ------------------------------------
-
-    if (
-        !Number.isInteger(hours) ||
-        !Number.isInteger(minutes)
-    ) {
-
-        showError(
-            "時間と分を正しく入力してください"
-        );
-
+    if (isUpdating) {
         return;
     }
 
 
-    if (
-        hours < 0 ||
-        hours > 23
-    ) {
-
-        showError(
-            "時間は0〜23時間で入力してください"
-        );
-
-        return;
-    }
-
-
-    if (
-        minutes < 0 ||
-        minutes > 59
-    ) {
-
-        showError(
-            "分は0〜59分で入力してください"
-        );
-
-        return;
-    }
-
-
-    const totalMinutes =
-        hours * 60 + minutes;
-
-
-    if (totalMinutes <= 0) {
-
-        showError(
-            "1分以上を指定してください"
-        );
-
-        return;
-    }
-
-
-    // 最大24時間
-    if (totalMinutes > 24 * 60) {
-
-        showError(
-            "電話OKの時間は24時間以内で指定してください"
-        );
-
-        return;
-    }
-
+    isUpdating = true;
 
     setButtonsDisabled(
         true
     );
 
+    showMessage(
+        "更新しています..."
+    );
+
 
     try {
 
-        // --------------------------------
-        // ブラウザ時刻ではなく
-        // Supabase DB時刻を基準にする
-        // --------------------------------
+        const hours =
+            Number(
+                hoursInput.value
+            );
+
+        const minutes =
+            Number(
+                minutesInput.value
+            );
+
+
+        // ========================================
+        // 入力チェック
+        // ========================================
+
+        if (
+            !Number.isInteger(hours) ||
+            !Number.isInteger(minutes)
+        ) {
+
+            throw new Error(
+                "時間を正しく入力してください"
+            );
+        }
+
+
+        if (
+            hours < 0 ||
+            hours > 23
+        ) {
+
+            throw new Error(
+                "時間は0～23時間で入力してください"
+            );
+        }
+
+
+        if (
+            minutes < 0 ||
+            minutes > 59
+        ) {
+
+            throw new Error(
+                "分は0～59分で入力してください"
+            );
+        }
+
+
+        const totalMinutes =
+            hours * 60 + minutes;
+
+
+        if (
+            totalMinutes <= 0
+        ) {
+
+            throw new Error(
+                "1分以上を指定してください"
+            );
+        }
+
+
+        // ========================================
+        // 現在時刻から期限を計算
+        // ========================================
 
         const expiresAt =
             new Date(
@@ -669,7 +745,18 @@ async function setPhoneOk() {
             ).toISOString();
 
 
+        console.log(
+            "expires_at:",
+            expiresAt
+        );
+
+
+        // ========================================
+        // Supabase更新
+        // ========================================
+
         const {
+            data,
             error
         } = await supabaseClient
             .from("rooms")
@@ -680,13 +767,17 @@ async function setPhoneOk() {
             .eq(
                 "room_id",
                 roomId
-            );
+            )
+            .select(
+                "room_id,status,expires_at"
+            )
+            .single();
 
 
         if (error) {
 
             console.error(
-                "OK更新エラー:",
+                "電話OK更新エラー:",
                 error
             );
 
@@ -694,25 +785,39 @@ async function setPhoneOk() {
         }
 
 
-        // 自分の画面も即時更新
-        renderRoom({
-            room_id: roomId,
-            status: "ok",
-            expires_at: expiresAt
-        });
+        // ========================================
+        // 自分の画面を更新
+        // ========================================
+
+        renderStatus(
+            data.status,
+            data.expires_at
+        );
+
+
+        showMessage(
+            "電話OKに変更しました",
+            "success"
+        );
 
 
     } catch (error) {
 
         console.error(
+            "電話OK処理エラー:",
             error
         );
 
-        showError(
-            "電話OKへの変更に失敗しました"
+        showMessage(
+            error.message ||
+            "状態の更新に失敗しました",
+            "error"
         );
 
+
     } finally {
+
+        isUpdating = false;
 
         setButtonsDisabled(
             false
@@ -721,102 +826,32 @@ async function setPhoneOk() {
 }
 
 
-// ============================================
-// 15. NGボタン
-// ============================================
-
-ngButton.addEventListener(
-    "click",
-    async () => {
-
-        await setPhoneNg();
-
-    }
-);
-
+// ============================================================
+// 17. 電話NGに変更
+// ============================================================
 
 async function setPhoneNg() {
 
-    hideError();
+    if (isUpdating) {
+        return;
+    }
+
+
+    isUpdating = true;
 
     setButtonsDisabled(
         true
+    );
+
+    showMessage(
+        "更新しています..."
     );
 
 
     try {
 
         const {
-            error
-        } = await supabaseClient
-            .from("rooms")
-            .update({
-                status: "ng",
-                expires_at: null
-            })
-            .eq(
-                "room_id",
-                roomId
-            );
-
-
-        if (error) {
-
-            console.error(
-                "NG更新エラー:",
-                error
-            );
-
-            throw error;
-        }
-
-
-        renderNg();
-
-
-    } catch (error) {
-
-        console.error(
-            error
-        );
-
-        showError(
-            "電話NGへの変更に失敗しました"
-        );
-
-    } finally {
-
-        setButtonsDisabled(
-            false
-        );
-    }
-}
-
-
-// ============================================
-// 16. 期限到達時の即時NG
-// ============================================
-
-let expirationRequestInProgress =
-    false;
-
-
-async function expireRoomImmediately() {
-
-    if (
-        expirationRequestInProgress
-    ) {
-        return;
-    }
-
-
-    expirationRequestInProgress =
-        true;
-
-
-    try {
-
-        const {
+            data,
             error
         } = await supabaseClient
             .from("rooms")
@@ -828,50 +863,159 @@ async function expireRoomImmediately() {
                 "room_id",
                 roomId
             )
-            .eq(
-                "status",
-                "ok"
-            );
+            .select(
+                "room_id,status,expires_at"
+            )
+            .single();
 
 
         if (error) {
 
             console.error(
-                "期限切れ処理エラー:",
+                "電話NG更新エラー:",
                 error
             );
+
+            throw error;
         }
+
+
+        renderStatus(
+            data.status,
+            data.expires_at
+        );
+
+
+        showMessage(
+            "今は電話できない状態にしました",
+            "success"
+        );
 
 
     } catch (error) {
 
         console.error(
+            "電話NG処理エラー:",
             error
         );
 
+        showMessage(
+            "状態の更新に失敗しました",
+            "error"
+        );
+
+
     } finally {
 
-        expirationRequestInProgress =
-            false;
+        isUpdating = false;
+
+        setButtonsDisabled(
+            false
+        );
     }
 }
 
 
-// ============================================
-// 17. Realtime
-// ============================================
+// ============================================================
+// 18. URLコピー
+// ============================================================
 
-let realtimeChannel =
-    null;
+async function copyCurrentUrl() {
+
+    try {
+
+        const url =
+            window.location.href;
 
 
-function setupRealtime() {
+        // ========================================
+        // Clipboard API
+        // ========================================
 
-    if (realtimeChannel) {
+        if (
+            navigator.clipboard &&
+            window.isSecureContext
+        ) {
 
-        supabaseClient.removeChannel(
-            realtimeChannel
+            await navigator.clipboard.writeText(
+                url
+            );
+
+        } else {
+
+            // ====================================
+            // 古いブラウザ向け
+            // ====================================
+
+            const textarea =
+                document.createElement(
+                    "textarea"
+                );
+
+            textarea.value =
+                url;
+
+            textarea.style.position =
+                "fixed";
+
+            textarea.style.left =
+                "-9999px";
+
+            document.body.appendChild(
+                textarea
+            );
+
+            textarea.focus();
+
+            textarea.select();
+
+            document.execCommand(
+                "copy"
+            );
+
+            textarea.remove();
+        }
+
+
+        showMessage(
+            "URLをコピーしました",
+            "success"
         );
+
+
+    } catch (error) {
+
+        console.error(
+            "URLコピーエラー:",
+            error
+        );
+
+        showMessage(
+            "URLのコピーに失敗しました",
+            "error"
+        );
+    }
+}
+
+
+// ============================================================
+// 19. Realtime設定
+// ============================================================
+
+function subscribeToRoom() {
+
+    // すでに購読している場合
+    if (
+        realtimeChannel
+    ) {
+
+        supabaseClient
+            .removeChannel(
+                realtimeChannel
+            );
+
+        realtimeChannel =
+            null;
     }
 
 
@@ -889,32 +1033,43 @@ function setupRealtime() {
                     filter:
                         `room_id=eq.${roomId}`
                 },
-                (payload) => {
+                payload => {
 
                     console.log(
-                        "Realtime update:",
+                        "Realtime UPDATE:",
                         payload
                     );
 
 
+                    const newData =
+                        payload.new;
+
+
                     if (
-                        payload.new.room_id !== roomId
+                        newData.room_id !== roomId
                     ) {
 
                         return;
                     }
 
 
-                    renderRoom(
-                        payload.new
+                    renderStatus(
+                        newData.status,
+                        newData.expires_at
+                    );
+
+
+                    showMessage(
+                        "状態が更新されました",
+                        "success"
                     );
                 }
             )
             .subscribe(
-                (status) => {
+                status => {
 
                     console.log(
-                        "Realtime status:",
+                        "Realtime状態:",
                         status
                     );
 
@@ -923,31 +1078,36 @@ function setupRealtime() {
                         status === "SUBSCRIBED"
                     ) {
 
-                        setConnectionStatus(
-                            "● リアルタイム接続中"
+                        console.log(
+                            "Realtime接続成功"
                         );
 
-                    }
-
-
-                    if (
-                        status === "CHANNEL_ERROR" ||
-                        status === "TIMED_OUT"
+                    } else if (
+                        status ===
+                        "CHANNEL_ERROR"
                     ) {
 
-                        setConnectionStatus(
-                            "● リアルタイム接続エラー"
+                        console.error(
+                            "Realtime接続エラー"
                         );
 
-                    }
+                        showMessage(
+                            "リアルタイム接続に失敗しました",
+                            "error"
+                        );
 
-
-                    if (
-                        status === "CLOSED"
+                    } else if (
+                        status ===
+                        "TIMED_OUT"
                     ) {
 
-                        setConnectionStatus(
-                            "● 接続終了"
+                        console.error(
+                            "Realtime接続タイムアウト"
+                        );
+
+                        showMessage(
+                            "リアルタイム接続がタイムアウトしました",
+                            "error"
                         );
                     }
                 }
@@ -955,187 +1115,153 @@ function setupRealtime() {
 }
 
 
-// ============================================
-// 18. URLコピー
-// ============================================
+// ============================================================
+// 20. ボタンイベント
+// ============================================================
+
+okButton.addEventListener(
+    "click",
+    setPhoneOk
+);
+
+
+ngButton.addEventListener(
+    "click",
+    setPhoneNg
+);
+
 
 copyButton.addEventListener(
     "click",
-    async () => {
-
-        try {
-
-            await navigator.clipboard.writeText(
-                window.location.href
-            );
+    copyCurrentUrl
+);
 
 
-            copyMessage.classList.remove(
-                "hidden"
-            );
+// ============================================================
+// 21. ページを閉じる / バックグラウンド
+// ============================================================
 
+// ブラウザを戻ったり別ページへ移動した場合
+// カウントダウンタイマーを停止
+window.addEventListener(
+    "pagehide",
+    () => {
 
-            setTimeout(
-                () => {
+        stopCountdown();
 
-                    copyMessage.classList.add(
-                        "hidden"
-                    );
+        if (
+            realtimeChannel
+        ) {
 
-                },
-                2000
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                "URLコピーエラー:",
-                error
-            );
-
-
-            // Clipboard APIが使えない場合
-            fallbackCopyUrl();
+            supabaseClient
+                .removeChannel(
+                    realtimeChannel
+                );
         }
     }
 );
 
 
-function fallbackCopyUrl() {
+// ページが再び表示されたとき
+// DBから最新状態を取得
+document.addEventListener(
+    "visibilitychange",
+    () => {
 
-    const textarea =
-        document.createElement(
-            "textarea"
-        );
+        if (
+            document.visibilityState ===
+            "visible"
+        ) {
+
+            fetchRoom();
+        }
+    }
+);
 
 
-    textarea.value =
-        window.location.href;
+// ============================================================
+// 22. アプリ起動
+// ============================================================
 
-
-    document.body.appendChild(
-        textarea
-    );
-
-
-    textarea.select();
-
+async function initializeApp() {
 
     try {
 
-        document.execCommand(
-            "copy"
+        // room_id取得
+        roomId =
+            getRoomId();
+
+
+        // room表示
+        renderRoomId();
+
+
+        // ボタン有効化
+        setButtonsDisabled(
+            false
         );
 
-        copyMessage.textContent =
-            "URLをコピーしました";
 
-        copyMessage.classList.remove(
-            "hidden"
+        // room取得 / 作成
+        await fetchRoom();
+
+
+        // Realtime購読
+        subscribeToRoom();
+
+
+        console.log(
+            "アプリ初期化完了"
         );
 
-
-        setTimeout(
-            () => {
-
-                copyMessage.classList.add(
-                    "hidden"
-                );
-
-            },
-            2000
+        console.log(
+            "room_id:",
+            roomId
         );
+
 
     } catch (error) {
 
         console.error(
-            "コピー失敗:",
+            "アプリ初期化エラー:",
             error
         );
 
-        showError(
-            "URLをコピーできませんでした"
+
+        statusCard.classList.remove(
+            "ok"
         );
 
+        statusCard.classList.add(
+            "ng"
+        );
+
+        statusIcon.textContent =
+            "⚠️";
+
+        statusText.textContent =
+            "状態を取得できません";
+
+
+        remainingTime.textContent =
+            "";
+
+
+        showMessage(
+            "状態の取得に失敗しました",
+            "error"
+        );
+
+
+        setButtonsDisabled(
+            true
+        );
     }
-
-
-    document.body.removeChild(
-        textarea
-    );
 }
 
 
-// ============================================
-// 19. エラー表示
-// ============================================
+// ============================================================
+// 23. 起動
+// ============================================================
 
-function showError(
-    message
-) {
-
-    errorMessage.textContent =
-        message;
-
-    errorMessage.classList.remove(
-        "hidden"
-    );
-}
-
-
-function hideError() {
-
-    errorMessage.classList.add(
-        "hidden"
-    );
-}
-
-
-// ============================================
-// 20. 接続状態
-// ============================================
-
-function setConnectionStatus(
-    text
-) {
-
-    connectionStatus.textContent =
-        text;
-}
-
-
-// ============================================
-// 21. ボタン制御
-// ============================================
-
-function setButtonsDisabled(
-    disabled
-) {
-
-    okButton.disabled =
-        disabled;
-
-    ngButton.disabled =
-        disabled;
-}
-
-
-function disableControls() {
-
-    okButton.disabled =
-        true;
-
-    ngButton.disabled =
-        true;
-
-    copyButton.disabled =
-        true;
-}
-
-
-// ============================================
-// 22. 初期化
-// ============================================
-
-initialize();
+initializeApp();
