@@ -11,7 +11,7 @@
 // ★ここは自分のSupabaseの Project URL
 // 「/rest/v1/」は付けない
 const SUPABASE_URL =
-    "https://yazersdyvuhirftxocze.supabase.co";
+    "https://yukoyuko-cloud.github.io/phone-status-app/?room=7e298230-8294-4a68-adb7-c5b4d5849888";
 
 // ★ここはSupabaseの Publishable key
 const SUPABASE_PUBLISHABLE_KEY =
