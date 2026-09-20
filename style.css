@@ -1,0 +1,339 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
+        "Meiryo",
+        sans-serif;
+
+    background: #f4f7f5;
+    color: #222;
+
+    -webkit-font-smoothing: antialiased;
+}
+
+.app {
+    width: 100%;
+    max-width: 520px;
+    min-height: 100vh;
+
+    margin: 0 auto;
+    padding: 24px 18px 32px;
+}
+
+/* =========================
+   ヘッダー
+========================= */
+
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.header p {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #777;
+    word-break: break-all;
+}
+
+/* =========================
+   状態カード
+========================= */
+
+.status-card {
+    border-radius: 24px;
+    padding: 36px 20px;
+
+    text-align: center;
+
+    background: #fff;
+
+    box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.08);
+
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.status-card.ok {
+    background: #ecfdf3;
+    border: 2px solid #34c759;
+}
+
+.status-card.ng {
+    background: #fff1f1;
+    border: 2px solid #ff4d4f;
+}
+
+.status-icon {
+    font-size: 64px;
+    line-height: 1;
+
+    margin-bottom: 20px;
+}
+
+.status-card h2 {
+    margin: 0;
+
+    font-size: 28px;
+    font-weight: 800;
+
+    letter-spacing: 0.02em;
+}
+
+.status-card.ok h2 {
+    color: #16803c;
+}
+
+.status-card.ng h2 {
+    color: #c62828;
+}
+
+.remaining-time {
+    min-height: 28px;
+
+    margin: 14px 0 0;
+
+    font-size: 18px;
+    font-weight: 600;
+
+    color: #555;
+}
+
+/* =========================
+   操作エリア
+========================= */
+
+.control-section {
+    margin-top: 20px;
+
+    padding: 22px 18px;
+
+    background: #fff;
+
+    border-radius: 20px;
+
+    box-shadow:
+        0 5px 20px rgba(0, 0, 0, 0.06);
+}
+
+.control-section h2 {
+    margin: 0 0 18px;
+
+    font-size: 18px;
+    text-align: center;
+}
+
+/* =========================
+   時間入力
+========================= */
+
+.time-input {
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
+    gap: 18px;
+
+    margin-bottom: 20px;
+}
+
+.input-group {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+}
+
+.input-group input {
+    width: 78px;
+    height: 52px;
+
+    padding: 0 10px;
+
+    border: 1px solid #d6d6d6;
+    border-radius: 12px;
+
+    background: #fafafa;
+
+    font-size: 22px;
+    text-align: center;
+
+    outline: none;
+}
+
+.input-group input:focus {
+    border-color: #4c9aff;
+
+    background: #fff;
+
+    box-shadow:
+        0 0 0 3px rgba(76, 154, 255, 0.15);
+}
+
+.input-group span {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* =========================
+   ボタン
+========================= */
+
+.action-button,
+.copy-button {
+    width: 100%;
+
+    min-height: 58px;
+
+    border: none;
+    border-radius: 14px;
+
+    font-size: 18px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    -webkit-tap-highlight-color: transparent;
+
+    transition:
+        transform 0.1s ease,
+        opacity 0.2s ease;
+}
+
+.action-button:active,
+.copy-button:active {
+    transform: scale(0.98);
+}
+
+.action-button:disabled,
+.copy-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ok-button {
+    background: #22c55e;
+    color: #fff;
+
+    margin-bottom: 12px;
+}
+
+.ok-button:hover {
+    background: #16a34a;
+}
+
+.ng-button {
+    background: #ef4444;
+    color: #fff;
+}
+
+.ng-button:hover {
+    background: #dc2626;
+}
+
+/* =========================
+   URLコピー
+========================= */
+
+.share-section {
+    margin-top: 20px;
+}
+
+.copy-button {
+    background: #fff;
+    color: #333;
+
+    border: 1px solid #d7d7d7;
+
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.copy-button:hover {
+    background: #f8f8f8;
+}
+
+/* =========================
+   メッセージ
+========================= */
+
+.message {
+    min-height: 24px;
+
+    margin-top: 16px;
+
+    text-align: center;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    color: #555;
+}
+
+.message.error {
+    color: #c62828;
+}
+
+.message.success {
+    color: #16803c;
+}
+
+/* =========================
+   スマートフォン調整
+========================= */
+
+@media (max-width: 380px) {
+
+    .app {
+        padding:
+            20px 14px 28px;
+    }
+
+    .header h1 {
+        font-size: 22px;
+    }
+
+    .status-card {
+        padding:
+            30px 14px;
+    }
+
+    .status-icon {
+        font-size: 54px;
+    }
+
+    .status-card h2 {
+        font-size: 24px;
+    }
+
+    .time-input {
+        gap: 10px;
+    }
+
+    .input-group input {
+        width: 68px;
+    }
+}
